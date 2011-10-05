@@ -1,0 +1,20 @@
+mainmodule stream
+{
+	readonly CProxy_Controller controllerProxy;
+	readonly int n;
+	readonly double scalar;
+
+	mainchare Controller {
+		entry Controller(CkArgMsg * msg);
+		entry void StepComplete(int subphase);
+		};
+
+	group Worker {
+		entry Worker();
+		entry void Copy();
+		entry void Scale();
+		entry void Add();
+		entry void Triad();
+		};
+};
+
