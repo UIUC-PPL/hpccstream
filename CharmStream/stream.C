@@ -1,156 +1,128 @@
 #include <iostream>
 #include <cstdlib>
+#include <stdlib.h>
 #include <cmath>
 #include <string>
-
 
 using namespace std;
 
 #include "stream.decl.h"
 
-#define N 4000000
+// N is per node array size, 24*N > 1/4 (system memory)
+#define N 17000000
+#define numIterations 10
 
 CProxy_Controller controllerProxy;
-int n;
-double scalar;
+double alpha;
 
 class Controller:public CBase_Controller
 {
 		private:
-				int count;
-				int numIterations;
-				int numOfPhasesDone; 
+				int numSteps; 
 				CProxy_Worker workerProxy;
-				double startTime, stopTime;
+				double times[numIterations+1];
+				bool validating;
 		public:
 				Controller(CkArgMsg *msg)
-						{
+				{
 							
-								workerProxy = CProxy_Worker::ckNew();
-								numOfPhasesDone = 0;
-								count =0;
-								numIterations = 10;
-								scalar = 3.0;
-								controllerProxy = thisProxy;
+						workerProxy = CProxy_Worker::ckNew();
+						numSteps = 0;
+						alpha = 3.0;
+						controllerProxy = thisProxy;
+						validating = false;
 
-							//	CkCallback * cb = new CkCallback(CkIndex_Controller::ReductionCallback(NULL), thisProxy);
-							//	cells.ckSetReductionClient(cb);
+						CkCallback * cb = new CkCallback(CkIndex_Controller::StepComplete(NULL), thisProxy);
+						workerProxy.ckSetReductionClient(cb);
 
-								startTime = CmiWallTimer();
-								workerProxy.Copy();
+						times[0] = CmiWallTimer();
 
-							//	ckout<<"Main done"<<endl;
+						//call parallel Triad function
+						workerProxy.Triad();
 
+						delete msg;
+				}
 
-						}
 				Controller(CkMigrateMessage * msg){}
-				/*void Done()
+				
+				void Done()
 				{
-
-						count++;
-						if(count == numOfChares)
-						{
-								stopTime = CmiWallTimer();
-								ckout<<"*****************  Time (in seconds) = " << (stopTime - startTime)<<"*****************"<<endl;
-								CkExit();
-						}
-				}
-				void ReductionCallback(CkReductionMsg * msg)
-				{
-						int data = *((int *)(msg->getData()));
-						stopTime = CmiWallTimer();
-						ckout<<"*****************  Time (in seconds) = " << (stopTime - startTime)<<"*****************"<<endl;
-
-				//		ckout<<"Reduction Succesful : processor done ="<<data<<endl;
-						CkExit();
-				}*/
 					
-
-				void StepComplete(int subphase)
-				{
-						count++;
-						if(count == CkNumPes())
-						{
-								count =0;
-								if(subphase == 1)
-								{
-										workerProxy.Scale();
-								}
-								else if(subphase ==2)
-								{
-										workerProxy.Add();
-								}
-								else if(subphase ==3)
-								{
-										workerProxy.Triad();
-								}
-								else {
-										numOfPhasesDone++;
-										if(numOfPhasesDone < numIterations)
-												{
-														workerProxy.Copy();
-												}
-										else {
-												//Done();
-												CkExit();
-										}
-								}
-
-						}
+						ckout<<"Verification Successful"<<endl;
+						//Calculate min of times array and then calculate measured bandwidth
+						double minTime=  times[0];
+						for (int i =0; i < numIterations; i++)
+								minTime = (minTime <= times[i])? minTime:times[i];
+					
+						ckout<<"*****************  Benchmark Finished  *****************"<<endl;
+					//	ckout<<"Time (s) = "<<minTime <<endl;
+						ckout<<" Performance (Gbytes/s) = "<< ((24 * N )/(minTime * 1000000000))<<endl;
+						CkExit();
 				}
+							
+				void StepComplete(CkReductionMsg *msg)
+				{
+						delete msg;
+						
+						// Called back from successful validation
+						if (validating)
+								Done();
+
+						// Otherwise Called back from computaion
+						times[numSteps+1] = CmiWallTimer();
+						times[numSteps] = times[numSteps+1] - times[numSteps];
+						
+						numSteps++;
+						if(numSteps < numIterations)
+								workerProxy.Triad();
+						else 
+							{
+							//Verify the results 
+							validating = true;
+							workerProxy.Varify();
+							}
+				}
+			
 };
 
 class Worker:public CBase_Worker
 {
 		private:
 				double a[N],b[N],c[N];
-			
 
 		public:
 				Worker()
 				{
+						//Intiialize using random numbers
+					   srand(CkMyPe());
 					   for (int j=0; j<N; j++) {
-							   a[j] = 1.0;
-							   b[j] = 2.0;
-							   c[j] = 0.0;
+							   b[j] = (rand()/(double)RAND_MAX+1);
+							   c[j] = (rand()/(double)RAND_MAX+1);
 							   }
 					
 				}
-				void Copy()
-				{
-						for (int j=0; j<N; j++)
-								c[j] = a[j];
 
-					//	CkPrintf("Worker %d Copy\n ",CkMyPe());
-						int subphase = 1;
-						controllerProxy.StepComplete(subphase);
-				}
-				void Scale()
-				{
-						for (int j=0; j<N; j++)
-								b[j] = scalar * c[j];
-
-					//	CkPrintf("Worker %d Scale\n ",CkMyPe());
-						int subphase = 2;
-						controllerProxy.StepComplete(subphase);
-				}
-				void Add()
-				{
-						for (int j=0; j<N; j++)
-								c[j] = a[j] + b[j];
-
-					//	CkPrintf("Worker %d Add\n ",CkMyPe());
-						int subphase = 3;
-						controllerProxy.StepComplete(subphase);
-				}
+				/* Actual Triad Computation */
 				void Triad()
 				{
 						for (int j=0; j<N; j++)
-								a[j] = b[j] + scalar * c[j];
+								a[j] = b[j] + alpha * c[j];
 
-						CkPrintf("Worker %d Triad\n ",CkMyPe());
-						int subphase = 4;
-						controllerProxy.StepComplete(subphase);
+						contribute(); 
+				}
+
+
+				/* Verification */
+				void Varify()
+				{
+						srand(CkMyPe());
+						for(int j=0; j<N; j++)
+								if (a[j] !=(rand()/(double)RAND_MAX+1) + alpha *  (rand()/(double)RAND_MAX+1))
+								{
+									ckout<<"Verification Failed"<<endl;
+									CkExit();
+								}
+						contribute(); 
 				}
 
 				Worker(CkMigrateMessage * msg){}
