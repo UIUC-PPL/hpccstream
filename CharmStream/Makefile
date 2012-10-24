@@ -1,4 +1,4 @@
-CHARMC=~/openatom/charm/net-linux-x86_64/bin/charmc $(OPTS)
+CHARMC=$(HOME)/charm/net-darwin-x86_64/bin/charmc $(OPTS)
 
 
 default: all

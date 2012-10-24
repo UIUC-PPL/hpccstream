@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -O2
+CFLAGS = -fopenmp -D_OPENMP -O2
 
 FF = g77
 FFLAGS = -O2

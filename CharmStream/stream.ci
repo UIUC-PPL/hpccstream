@@ -10,8 +10,8 @@ mainmodule stream
 
 	group Worker {
 		entry Worker();
-		entry void Triad();
-		entry void Varify();
+		entry void Tried();
+		entry void Verify();
 		};
 };
 

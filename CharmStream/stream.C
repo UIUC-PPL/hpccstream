@@ -9,7 +9,7 @@ using namespace std;
 #include "stream.decl.h"
 
 // N is per node array size, 24*N > 1/4 (system memory)
-#define N 17000000
+#define N 1000000
 #define numIterations 10
 
 CProxy_Controller controllerProxy;
@@ -37,8 +37,8 @@ class Controller:public CBase_Controller
 
 						times[0] = CmiWallTimer();
 
-						//call parallel Triad function
-						workerProxy.Triad();
+						//call parallel Tried function
+						workerProxy.Tried();
 
 						delete msg;
 				}
@@ -74,12 +74,12 @@ class Controller:public CBase_Controller
 						
 						numSteps++;
 						if(numSteps < numIterations)
-								workerProxy.Triad();
+								workerProxy.Tried();
 						else 
 							{
 							//Verify the results 
 							validating = true;
-							workerProxy.Varify();
+							workerProxy.Verify();
 							}
 				}
 			
@@ -102,8 +102,8 @@ class Worker:public CBase_Worker
 					
 				}
 
-				/* Actual Triad Computation */
-				void Triad()
+				/* Actual Tried Computation */
+				void Tried()
 				{
 						for (int j=0; j<N; j++)
 								a[j] = b[j] + alpha * c[j];
@@ -113,7 +113,7 @@ class Worker:public CBase_Worker
 
 
 				/* Verification */
-				void Varify()
+				void Verify()
 				{
 						srand(CkMyPe());
 						for(int j=0; j<N; j++)
